@@ -25,24 +25,19 @@
  * - Multi-task architecture for concurrent operations
  */
 
-// C++ Standard Libraries
-#include <vector>
-#include <cmath>
-#include <cstdint>
-
 // Arduino Platform
 #include <Arduino.h>
 
 // Local configuration
+#include "config_ros.hpp"
 #include "config_transport.hpp"  // TODO: Update with transport settings
+#include "macros.hpp"
 
 // micro-ROS Libraries
 #include <micro_ros_platformio.h>
 #include <rcl/rcl.h>
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
-#include <std_msgs/msg/string.h>
-#include <rosidl_runtime_c/primitives_sequence_functions.h>
 
 // ROS2 Context and Executor
 rclc_executor_t executor;
@@ -70,13 +65,10 @@ constexpr uint8_t TXD2 = 255;  ///< UART2 Transmit pin (disabled with 255)
 // Time Synchronization Variables
 /// Timeout for ROS agent sync session in milliseconds
 const int SYNC_TIMEOUT_MS = 2000;
-
 /// Synchronized system time in milliseconds from agent
 int64_t ros_synced_time_ms = 0;
-
 /// Synchronized system time in nanoseconds from agent
 int64_t ros_synced_time_ns = 0;
-
 /// Local time (milliseconds) at last synchronization point
 long ms_before_sync = 0;
 
@@ -105,39 +97,6 @@ void vTaskMicroROS(void* pvParameters);
  */
 void sync_timer_callback(rcl_timer_t* timer, int64_t last_call_time);
 
-/**
- * @brief Macro for checking ROS2 function return values.
- *        Enters error loop if the function fails.
- * @param fn The ROS2 function to check.
- */
-#define RCCHECK(fn)                  \
-  {                                  \
-    rcl_ret_t temp_rc = fn;          \
-    if ((temp_rc != RCL_RET_OK)) {   \
-      error_loop();                  \
-    }                                \
-  }
-
-/**
- * @brief Soft version of RCCHECK that logs but doesn't stop execution.
- * @param fn The ROS2 function to check.
- */
-#define RCSOFTCHECK(fn)              \
-  {                                  \
-    rcl_ret_t temp_rc = fn;          \
-    if ((temp_rc != RCL_RET_OK)) {   \
-    }                                \
-  }
-
-/**
- * @brief Infinite error loop function. If something fails, the device stops here.
- *        Flashes the device in a continuous loop.
- */
-void error_loop() {
-  while (true) {
-    delay(100);
-  }
-}
 
 /**
  * @brief Arduino setup function. Initializes hardware, ROS2, and creates tasks.
@@ -145,13 +104,12 @@ void error_loop() {
 void setup() {
   // Initialize serial communication with PC
   Serial.begin(115200);
-
-  // Initialize UART2 for sensor communication
-  // Serial2.begin(115200, SERIAL_8N1, RXD2, TXD2);
-
   // Configure micro-ROS WiFi transport to connect to ROS agent
+  // Uncomment and update the following line with your transport settings
+  // (e.g., WiFi credentials, agent IP/port)
   set_microros_wifi_transports(WIFI_SSID, WIFI_PASSWORD, AGENT_IP, AGENT_PORT);
-  Serial.println("Micro-ROS configuration set...");
+  //set_microros_serial_transports(Serial);
+  Serial.println("micro-ROS configuration set...");
 
   allocator = rcl_get_default_allocator();
 
@@ -160,11 +118,11 @@ void setup() {
   rcl_init_options_init(&init_options, allocator);
   rcl_init_options_set_domain_id(&init_options, ROS_DOMAIN_ID);
 
-  // Create ROS2 support structure
+  // Initialize rclc support object with custom options
   RCCHECK(rclc_support_init_with_options(&support, 0, nullptr, &init_options, &allocator));
 
-  // Create ROS2 node
-  RCCHECK(rclc_node_init_default(&node, "minibot_node", "", &support));
+  // Create node
+  RCCHECK(rclc_node_init_default(&node, ROS_NODE_NAME, "", &support));
 
   // TODO: Create your specific publishers/subscribers here
   // Example:
@@ -175,7 +133,8 @@ void setup() {
   //   "/your_topic"));
 
   // Initialize synchronization timer (5 seconds)
-  RCCHECK(rclc_timer_init_default(&sync_timer, &support, RCL_MS_TO_NS(5000), sync_timer_callback));
+  RCCHECK(
+    rclc_timer_init_default2(&sync_timer, &support, RCL_MS_TO_NS(5000), sync_timer_callback, true));
 
   // Create ROS2 executor
   RCCHECK(rclc_executor_init(
@@ -184,7 +143,7 @@ void setup() {
     1,  // Number of entities the executor can handle
     &allocator));
 
-  // Add timer to executor
+  // Add sync timer to executor
   RCCHECK(rclc_executor_add_timer(&executor, &sync_timer));
 
   // Create FreeRTOS queue for communication between tasks
@@ -215,19 +174,13 @@ void setup() {
 
   // Create task for micro-ROS executor (core 1, priority 1)
   xTaskCreatePinnedToCore(
-    vTaskMicroROS,
-    "vTaskMicroROS",
-    10000,
-    reinterpret_cast<void*>(1),
-    1,
-    &rosTaskHandle,
-    1);
+      vTaskMicroROS, "vTaskMicroROS", 10000, (void *)1, 3, &rosTaskHandle, 1);
 
   if (rosTaskHandle == nullptr) {
     Serial.println("ERROR: Failed to create micro-ROS task");
     error_loop();
   }
-  Serial.println("Micro-ROS task created...");
+  Serial.println("micro-ROS task created...");
 }
 
 /**
@@ -242,8 +195,9 @@ void vTaskMicroROS(void* pvParameters) {
 
   // Spin the micro-ROS executor
   for (;;) {
-    const uint32_t stack_high_water = uxTaskGetStackHighWaterMark(nullptr);
-    Serial.printf("Stack usage (executor task): %u words\n", stack_high_water);
+    // Log stack usage for debugging (optional)
+    // const uint32_t stack_high_water = uxTaskGetStackHighWaterMark(nullptr);
+    // Serial.printf("Stack usage (executor task): %u words\n", stack_high_water);
     rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10));
     vTaskDelay(500);
   }
@@ -308,7 +262,7 @@ void DataProcessTask(void* pvParameters) {
 void sync_timer_callback(rcl_timer_t* timer, int64_t last_call_time) {
   Serial.println("[TIMER] Sync timer callback called");
 
-  if (timer == nullptr) {
+  if (timer == NULL) {
     Serial.println("Error in timer_callback: timer parameter is nullptr");
     return;
   }
