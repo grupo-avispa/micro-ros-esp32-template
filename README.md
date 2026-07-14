@@ -128,10 +128,36 @@ Monitor serial output:
 
 ### 1. Start the micro-ROS Agent
 
-On your ROS 2 enabled machine (WiFi/UDP transport):
+#### Option A: Docker Compose (recommended)
+
+A [`docker-compose.yml`](docker-compose.yml) is provided with ready-to-use micro-ROS Agent services, so you don't need a local ROS 2 install to run the Agent:
+
+| Service          | Purpose                                                        |
+| ----------------- | -------------------------------------------------------------- |
+| `udp-agent`       | UDP4 Agent on port `9999`, matching the default `AGENT_PORT` in `config_transport.hpp` |
+| `serial-agent0`   | Serial Agent over `/dev/ttyUSB0`, for USB-connected boards      |
+| `base`            | `microros/base:rolling` dev container with the ROS 2 tooling   |
+
+Start the UDP Agent (used by the WiFi transport in this template):
 
 ```bash
-ros2 run micro_ros_agent micro_ros_agent udp4 --port 8888
+docker compose up udp-agent
+```
+
+Or the serial Agent, if you flashed with the serial transport instead:
+
+```bash
+docker compose up serial-agent0
+```
+
+Both containers use `network_mode: host` so the Agent is reachable at the host machine's IP — this is the `AGENT_IP` you set in `config_transport.hpp`. Stop them with `docker compose down`.
+
+#### Option B: Native `ros2 run`
+
+On a machine with ROS 2 installed:
+
+```bash
+ros2 run micro_ros_agent micro_ros_agent udp4 --port 9999
 ```
 
 ### 2. Verify Connection
