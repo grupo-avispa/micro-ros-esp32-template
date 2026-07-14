@@ -1,17 +1,20 @@
 # ESP32 micro-ROS template using PlatformIO
 ![ROS2](https://img.shields.io/badge/ros2-jazzy-blue?logo=ros&logoColor=white)
+![Arduino](https://img.shields.io/badge/Arduino-ESP32--S3-00979D?logo=arduino&logoColor=white)
 ![License](https://img.shields.io/github/license/grupo-avispa/micro-ros-esp32-template)
 
-A professional-grade firmware template for ESP32 microcontrollers running [micro-ROS](https://micro.ros.org/) with FreeRTOS multitasking support. Built with [PlatformIO](https://platformio.org/), this template provides a solid foundation for building distributed robotics systems with ROS 2 integration.
+A professional-grade firmware template for ESP32 microcontrollers running [micro-ROS](https://micro.ros.org/) with FreeRTOS multitasking support. Built with the [Arduino framework](https://www.arduino.cc/) and [PlatformIO](https://platformio.org/), this template provides a solid foundation for building distributed robotics systems with ROS 2 integration.
 
 ## Features
 
+- **Arduino Framework**: Built on Arduino ecosystem for ease of development and broad hardware compatibility
 - **micro-ROS Integration**: Full ROS 2 publisher/subscriber capabilities over WiFi
 - **FreeRTOS Multitasking**: Concurrent task execution with priority-based scheduling
 - **Time Synchronization**: Automatic clock synchronization with ROS agent
 - **Hardware Abstraction**: Modular serial communication layer
 
 ## Dependencies
+- [Arduino Framework](https://www.arduino.cc/) (Arduino SDK for ESP32),
 - [PlatformIO](https://docs.platformio.org/) (Cross-platform build system),
 - [Robot Operating System (ROS) 2](https://docs.ros.org/en/jazzy/) (middleware for robotics),
 - [micro-ROS](https://micro.ros.org/) (ROS 2 client library for microcontrollers),
