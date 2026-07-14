@@ -136,7 +136,7 @@ A [`docker-compose.yml`](docker-compose.yml) is provided with ready-to-use micro
 | ----------------- | -------------------------------------------------------------- |
 | `udp-agent`       | UDP4 Agent on port `9999`, matching the default `AGENT_PORT` in `config_transport.hpp` |
 | `serial-agent0`   | Serial Agent over `/dev/ttyUSB0`, for USB-connected boards      |
-| `base`            | `microros/base:rolling` dev container with the ROS 2 tooling   |
+| `base`            | `microros/base:jazzy` dev container with the ROS 2 tooling   |
 
 Start the UDP Agent (used by the WiFi transport in this template):
 
