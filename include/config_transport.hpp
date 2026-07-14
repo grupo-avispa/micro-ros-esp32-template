@@ -17,35 +17,36 @@
  * @file config_transport.hpp
  * @brief Transport and network configuration for micro-ROS WiFi communication.
  *
- * This header file contains the WiFi SSID, password, and ROS agent connection
- * parameters. Update these values to match your network and agent setup.
+ * WiFi credentials and the micro-ROS Agent address are defined here and used
+ * directly by the firmware (see main.cpp). This keeps the network configuration
+ * in a single, version-controlled file instead of the ESP-IDF menuconfig.
  *
  * @warning This file contains sensitive information (WiFi credentials).
- *          Do not commit to public repositories.
+ *          Do not commit real credentials to public repositories.
  */
 
 #ifndef CONFIG_TRANSPORT_HPP
 #define CONFIG_TRANSPORT_HPP
 
-#include <IPAddress.h>
-#include <cstdint>
-
 /**
- * @defgroup WiFiConfig WiFi and ROS2 Configuration Parameters
+ * @defgroup TransportConfig WiFi and micro-ROS Agent configuration
  * @{
  */
 
-/// WiFi network SSID (network name)
-static char WIFI_SSID[] = "YOUR_SSID";
+/// WiFi network SSID (network name).
+static constexpr char WIFI_SSID[] = "YOUR_SSID";
 
-/// WiFi network password (WPA/WPA2)
-static char WIFI_PASSWORD[] = "YOUR_PASSWORD";
+/// WiFi network password (WPA/WPA2).
+static constexpr char WIFI_PASSWORD[] = "YOUR_PASSWORD";
 
-/// IP address of the micro-ROS agent
-static IPAddress AGENT_IP(192, 168, 0, 0);
+/// Maximum number of WiFi connection retries before giving up.
+static constexpr int WIFI_MAXIMUM_RETRY = 10;
 
-/// TCP port number for micro-ROS agent communication
-static size_t AGENT_PORT = 8888;
+/// IP address of the micro-ROS Agent (dotted-decimal string).
+static constexpr char AGENT_IP[] = "192.168.0.0";
+
+/// UDP port of the micro-ROS Agent (string, as required by the micro-ROS API).
+static constexpr char AGENT_PORT[] = "9999";
 
 /** @} */
 

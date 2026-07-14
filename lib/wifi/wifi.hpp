@@ -14,27 +14,23 @@
 // limitations under the License.
 
 /**
- * @file config_ros.hpp
- * @brief ROS 2 configuration parameters for micro-ROS node.
+ * @file wifi.hpp
+ * @brief Self-contained WiFi station bring-up for ESP-IDF.
+ */
+
+#ifndef WIFI_HPP
+#define WIFI_HPP
+
+/**
+ * @brief Bring up the WiFi station and block until it connects (or fails).
  *
- * This header file contains the configuration parameters for the micro-ROS node,
- * including the domain ID for network isolation.
+ * Initializes NVS, the network interface and the WiFi driver in station mode,
+ * then blocks until an IP address is obtained or all retries are exhausted.
+ *
+ * @param ssid WiFi network SSID.
+ * @param password WiFi network password (WPA/WPA2).
+ * @param max_retry Maximum number of connection retries before giving up.
  */
+void wifi_connect(const char* ssid, const char* password, int max_retry = 10);
 
-#ifndef CONFIG_ROS_HPP
-#define CONFIG_ROS_HPP
-
-    /**
- * @defgroup ROS2 Configuration Parameters
- * @{
- */
-
-/// ROS 2 Domain ID for network isolation (0-232)
-static constexpr uint32_t ROS_DOMAIN_ID = 11;
-
-/// ROS 2 Node name
-static char ROS_NODE_NAME[] = "esp32_node";
-
-/** @} */
-
-#endif // CONFIG_ROS_HPP
+#endif // WIFI_HPP

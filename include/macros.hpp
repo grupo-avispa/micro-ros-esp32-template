@@ -25,40 +25,39 @@
 #ifndef MACROS_HPP
 #define MACROS_HPP
 
-#include <Arduino.h>
+#include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+/// Log tag used by the micro-ROS firmware.
+static const char* MACROS_TAG = "micro_ros";
 
 /**
  * @brief Macro for checking ROS2 function return values.
- *        Enters error loop if the function fails.
+ *        Logs the failing line and stops the micro-ROS task if the call fails.
  * @param fn The ROS2 function to check.
  */
-#define RCCHECK(fn)                  \
-  {                                  \
-    rcl_ret_t temp_rc = fn;          \
-    if ((temp_rc != RCL_RET_OK)) {   \
-      error_loop();                  \
-    }                                \
+#define RCCHECK(fn)                                                       \
+  {                                                                       \
+    rcl_ret_t temp_rc = fn;                                              \
+    if ((temp_rc != RCL_RET_OK)) {                                        \
+      ESP_LOGE(MACROS_TAG, "Failed status on line %d: %d. Aborting.",     \
+               __LINE__, (int)temp_rc);                                   \
+      vTaskDelete(NULL);                                                  \
+    }                                                                     \
   }
 
 /**
  * @brief Soft version of RCCHECK that logs but doesn't stop execution.
  * @param fn The ROS2 function to check.
  */
-#define RCSOFTCHECK(fn)              \
-  {                                  \
-    rcl_ret_t temp_rc = fn;          \
-    if ((temp_rc != RCL_RET_OK)) {   \
-    }                                \
+#define RCSOFTCHECK(fn)                                                    \
+  {                                                                        \
+    rcl_ret_t temp_rc = fn;                                               \
+    if ((temp_rc != RCL_RET_OK)) {                                         \
+      ESP_LOGW(MACROS_TAG, "Failed status on line %d: %d. Continuing.",    \
+               __LINE__, (int)temp_rc);                                    \
+    }                                                                      \
   }
-
-/**
- * @brief Infinite error loop function. If something fails, the device stops here.
- *        Flashes the device in a continuous loop.
- */
-void error_loop() {
-  while (true) {
-    delay(100);
-  }
-}
 
 #endif // MACROS_HPP

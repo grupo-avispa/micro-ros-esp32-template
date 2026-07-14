@@ -1,80 +1,136 @@
 # ESP32 micro-ROS template using PlatformIO
 ![ROS2](https://img.shields.io/badge/ros2-jazzy-blue?logo=ros&logoColor=white)
+![Espressif](https://img.shields.io/badge/Espressif-ESP32--S3-E7352C?logo=espressif&logoColor=white)
 ![License](https://img.shields.io/github/license/grupo-avispa/micro-ros-esp32-template)
 
-A professional-grade firmware template for ESP32 microcontrollers running [micro-ROS](https://micro.ros.org/) with FreeRTOS multitasking support. Built with [PlatformIO](https://platformio.org/), this template provides a solid foundation for building distributed robotics systems with ROS 2 integration.
+A professional-grade firmware template for ESP32 microcontrollers running [micro-ROS](https://micro.ros.org/) with FreeRTOS multitasking support. Built with [PlatformIO](https://platformio.org/) on top of the **ESP-IDF** framework, this template provides a solid foundation for building distributed robotics systems with ROS 2 integration.
+
+> **Note:** This template uses the ESP-IDF framework (`framework = espidf`) together with the [`micro_ros_espidf_component`](https://github.com/micro-ROS/micro_ros_espidf_component), which is vendored as a **git submodule** under `components/`. It is **not** the Arduino-based `micro_ros_platformio` library.
 
 ## Features
 
 - **micro-ROS Integration**: Full ROS 2 publisher/subscriber capabilities over WiFi
+- **ESP-IDF native**: Uses ESP-IDF APIs (`esp_log`, FreeRTOS, `esp_wifi`) directly
+- **In-code configuration**: WiFi and Agent settings live in a version-controlled header
+- **Modular WiFi library**: Reusable, self-contained station bring-up under `lib/wifi/`
 - **FreeRTOS Multitasking**: Concurrent task execution with priority-based scheduling
-- **Time Synchronization**: Automatic clock synchronization with ROS agent
-- **Hardware Abstraction**: Modular serial communication layer
+- **micro-ROS as a submodule**: Reproducible builds, kept in sync with upstream
 
 ## Dependencies
-- [PlatformIO](https://docs.platformio.org/) (Cross-platform build system),
-- [Robot Operating System (ROS) 2](https://docs.ros.org/en/jazzy/) (middleware for robotics),
-- [micro-ROS](https://micro.ros.org/) (ROS 2 client library for microcontrollers),
+- [PlatformIO](https://docs.platformio.org/) (Cross-platform build system)
+- [ESP-IDF](https://docs.espressif.com/projects/esp-idf/) (managed automatically by PlatformIO)
+- [Robot Operating System (ROS) 2](https://docs.ros.org/en/jazzy/) (middleware for robotics)
+- [micro-ROS](https://micro.ros.org/) (ROS 2 client library for microcontrollers)
+- ROS 2 build tools in the ESP-IDF Python environment (see [Setup](#setup))
+
+## Getting the sources
+
+This repository uses a git submodule for the micro-ROS component, so clone it recursively:
+
+```bash
+git clone --recurse-submodules <repo-url>
+# or, if you already cloned it:
+git submodule update --init --recursive
+```
+
+To update the micro-ROS component to the latest upstream commit of its tracked branch:
+
+```bash
+git submodule update --remote components/micro_ros_espidf_component
+```
+
+## Setup
+
+The `micro_ros_espidf_component` **builds micro-ROS from source** on the first build using the ROS 2 build tools (colcon/ament/rosidl). These must be available in the **Python environment that ESP-IDF uses** (PlatformIO ships its own, e.g. `~/.platformio/penv/.espidf-<version>`).
+
+Install them into that interpreter once:
+
+```bash
+# Locate the Python used by your PlatformIO ESP-IDF install (adjust the version):
+PY=~/.platformio/penv/.espidf-5.5.3/bin/python3
+
+$PY -m pip install catkin_pkg lark-parser "empy==3.3.4" colcon-common-extensions numpy
+```
+
+> `empy` must be pinned to `3.3.4`; newer 4.x releases are incompatible with `rosidl`.
+
+### Building on a machine with ROS 2 sourced
+
+If your shell sources a system ROS 2 (`/opt/ros/...` or a colcon workspace), its environment variables **and** its entries in `PATH` leak into the isolated micro-ROS build and break it (CMake's `find_package` searches the parent of every `PATH` entry, pulling in host ROS packages).
+
+Use the provided [`build.sh`](build.sh) wrapper, which strips the ROS environment before invoking PlatformIO:
+
+```bash
+./build.sh run              # build
+./build.sh run -t upload    # build and flash
+./build.sh run -t monitor   # open the serial monitor
+```
+
+If your machine does **not** source ROS 2, plain `pio run` works too.
 
 
 ## Configuration
 
-### WiFi and Network Settings
+### WiFi and Agent (in code)
 
-Edit `include/config_transport.hpp` to set your network parameters:
+WiFi credentials and the micro-ROS Agent address are defined in [`include/config_transport.hpp`](include/config_transport.hpp). The firmware brings up the WiFi station itself (`wifi_connect()` in `main.cpp`), so there is no need to use `menuconfig` for these:
 
 ```cpp
-/// WiFi network SSID
-static char* WIFI_SSID = "YOUR_SSID";
+/// WiFi network SSID (network name).
+static constexpr char WIFI_SSID[] = "YOUR_SSID";
 
-/// WiFi network password
-static char* WIFI_PASSWORD = "YOUR_PASSWORD";
+/// WiFi network password (WPA/WPA2).
+static constexpr char WIFI_PASSWORD[] = "YOUR_PASSWORD";
 
-/// Micro-ROS agent IP address
-static IPAddress AGENT_IP(192, 168, 0, 186);
+/// IP address of the micro-ROS Agent (dotted-decimal string).
+static constexpr char AGENT_IP[] = "192.168.0.150";
 
-/// Micro-ROS agent TCP port
-static uint16_t AGENT_PORT = 8888;
-
-/// ROS 2 Domain ID (0-232)
-static constexpr uint32_t ROS_DOMAIN_ID = 0;
+/// UDP port of the micro-ROS Agent (string, as required by the micro-ROS API).
+static constexpr char AGENT_PORT[] = "9999";
 ```
 
-### Hardware Configuration
+The transport itself is selected in `platformio.ini` (`board_microros_transport = wifi`).
 
-In `src/main.cpp`, configure serial communication pins:
+> **Security:** `config_transport.hpp` holds your WiFi credentials. Avoid committing real credentials to a public repository.
+
+### ROS 2 node settings
+
+Node-level parameters are defined in [`include/config_ros.hpp`](include/config_ros.hpp):
 
 ```cpp
-constexpr uint8_t RXD2 = 17;   ///< UART2 Receive pin
-constexpr uint8_t TXD2 = 255;  ///< UART2 Transmit pin (255 = disabled)
+/// ROS 2 Domain ID for network isolation (0-232)
+static constexpr uint32_t ROS_DOMAIN_ID = 0;
+
+/// ROS 2 Node name
+static char ROS_NODE_NAME[] = "esp32_node";
 ```
 
 ## Building and Flashing
 
+> On a machine with ROS 2 sourced, use `./build.sh` instead of `pio` (see [Setup](#setup)).
+
 Build the project:
 ```bash
-platformio run
+./build.sh run
 ```
 
 Upload to ESP32:
 ```bash
-platformio run --target upload
+./build.sh run -t upload
 ```
 
 Monitor serial output:
 ```bash
-platformio device monitor --baud 115200
+./build.sh run -t monitor
 ```
 
 ## Usage
 
 ### 1. Start the micro-ROS Agent
 
-On your ROS 2 enabled machine:
+On your ROS 2 enabled machine (WiFi/UDP transport):
 
 ```bash
-ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0
-# or for WiFi:
 ros2 run micro_ros_agent micro_ros_agent udp4 --port 8888
 ```
 
@@ -82,109 +138,93 @@ ros2 run micro_ros_agent micro_ros_agent udp4 --port 8888
 
 Monitor device output:
 ```bash
-platformio device monitor --baud 115200
+./build.sh run -t monitor
 ```
 
-You should see:
+You should see the node come up and start publishing:
 ```
-Micro-ROS configuration set...
-Serial read task created...
-Data process task created...
-Micro-ROS task created...
-Stack usage (executor task): XXX words
-[TIMER] Sync timer callback called
-Synchronized timestamp with PC agent
+I (1234) micro_ros: micro-ROS node 'esp32_node' ready, publishing on /esp32/counter
+I (2234) micro_ros: Publishing: 0
+I (3234) micro_ros: Publishing: 1
 ```
 
-### 3. Implement Your Sensors
-
-Modify the tasks to implement your specific sensor logic:
-
-#### Serial Reading Task
-```cpp
-void SerialReadTask(void* pvParameters) {
-  // 1. Read from serial interface (Serial2)
-  // 2. Parse data according to your protocol
-  // 3. Send to data_queue
-  
-  while (true) {
-    if (Serial2.available()) {
-      uint8_t byte = Serial2.read();
-      // Process and send
-      xQueueSend(data_queue, &processed_data, portMAX_DELAY);
-    }
-    vTaskDelay(10);
-  }
-}
+And on the ROS 2 side:
+```bash
+ros2 topic echo /esp32/counter
 ```
 
-#### Data Processing Task
-```cpp
-void DataProcessTask(void* pvParameters) {
-  // 1. Receive from data_queue
-  // 2. Process/filter data
-  // 3. Create ROS message
-  // 4. Publish
-  
-  uint16_t received_data;
-  
-  while (true) {
-    if (xQueueReceive(data_queue, &received_data, portMAX_DELAY) == pdPASS) {
-      // Create message
-      std_msgs__msg__Int32 msg = {static_cast<int32_t>(received_data)};
-      rcl_publish(&your_publisher, &msg, nullptr);
-    }
-  }
-}
-```
+## The example: a timer-driven publisher
 
-### 4. ROS 2 Integration
+[`main/main.cpp`](main/main.cpp) implements a minimal `std_msgs/Int32` publisher running inside a dedicated FreeRTOS task (`micro_ros_task`):
 
-Create publishers and subscribers in `setup()`:
+1. `app_main()` brings up WiFi via the `wifi` library and spawns the micro-ROS task.
+2. The task initializes the node, a publisher on `/esp32/counter`, a 1 Hz timer and an executor.
+3. On every timer tick, `timer_callback()` publishes an incrementing counter.
+
+Error handling uses the `RCCHECK` / `RCSOFTCHECK` macros from [`include/macros.hpp`](include/macros.hpp), which log via `ESP_LOG` and abort the task on fatal errors.
+
+The WiFi station bring-up is isolated in a self-contained, reusable PlatformIO library ([`lib/wifi/`](lib/wifi/)) that takes the credentials as parameters:
 
 ```cpp
-// Create publisher
+wifi_connect(WIFI_SSID, WIFI_PASSWORD, WIFI_MAXIMUM_RETRY);
+```
+
+To publish your own data, create additional publishers/subscribers in `micro_ros_task()` and add them to the executor:
+
+```cpp
 RCCHECK(rclc_publisher_init_default(
-  &your_publisher,
-  &node,
-  ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
-  "/sensor_data"));
-
-// Add to executor
-RCCHECK(rclc_executor_add_timer(&executor, &sync_timer));
+    &my_publisher,
+    &node,
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
+    "my_topic"));
 ```
 
 ## Task Architecture
 
-The firmware uses three main FreeRTOS tasks:
+The example runs a single micro-ROS task; add your own FreeRTOS tasks (sensor reading, processing, etc.) and communicate with the executor through thread-safe queues.
 
-| Task                | Core | Priority | Purpose                                |
-| ------------------- | ---- | -------- | -------------------------------------- |
-| **SerialReadTask**  | 0    | 1        | Read sensor data from serial interface |
-| **DataProcessTask** | 1    | 2        | Process data and publish ROS messages  |
-| **vTaskMicroROS**   | 1    | 1        | Execute micro-ROS event loop           |
+| Task              | Priority | Purpose                                    |
+| ----------------- | -------- | ------------------------------------------ |
+| **uros_task**     | 5        | Runs the micro-ROS node, timer & executor  |
 
-Task communication uses thread-safe FreeRTOS queues.
+## Project structure
+
+```
+.
+├── main/
+│   └── main.cpp                     # micro-ROS node, publisher and FreeRTOS task + app_main
+├── include/
+│   ├── config_ros.hpp               # ROS 2 node settings (name, domain id)
+│   ├── config_transport.hpp         # WiFi credentials and micro-ROS Agent address
+│   └── macros.hpp                   # RCCHECK / RCSOFTCHECK error-handling macros
+├── lib/
+│   └── wifi/                        # self-contained WiFi station library
+│       ├── wifi.hpp
+│       └── wifi.cpp
+├── components/
+│   └── micro_ros_espidf_component/  # micro-ROS component (git submodule)
+├── build.sh                         # PlatformIO wrapper that strips the host ROS environment
+├── custom.meta                      # micro-ROS (rmw) build configuration
+└── platformio.ini
+```
 
 ## Troubleshooting
 
+### `rcl/rcl.h: No such file or directory`
+The micro-ROS component is not registered. Ensure the submodule is checked out (`git submodule update --init --recursive`) so it lives under `components/micro_ros_espidf_component/`.
+
+### `ModuleNotFoundError: No module named 'catkin_pkg'` (or `colcon` / `empy`)
+The ROS 2 build tools are missing from the ESP-IDF Python environment. See [Setup](#setup).
+
+### `Could not find ROS middleware implementation 'rmw_cyclonedds_cpp'` / host `/opt/ros` packages
+A system ROS 2 environment is leaking into the isolated micro-ROS build. Build with [`build.sh`](build.sh), which strips the ROS environment and `PATH`.
+
 ### Connection Issues
-- Verify WiFi credentials in `config_transport.hpp`
-- Ensure agent IP and port are correct
-- Check network connectivity: `ping agent_ip_address`
+- Verify WiFi credentials and the Agent IP/port in `include/config_transport.hpp`.
+- Ensure the micro-ROS Agent is running and reachable: `ping <agent_ip>`.
+- Confirm both device and Agent use the same `ROS_DOMAIN_ID`.
 
-### Serial Communication
-- Verify baud rate (default: 115200)
-- Check pin configuration (RXD2=GPIO17, TXD2)
-- Use `Serial.printf()` for debugging
-
-### Compilation Errors
-- Ensure all micro-ROS dependencies are installed
-- Clear cache: `platformio run --target clean`
-- Check PlatformIO version: `platformio --version`
-
-## Performance Considerations
-
-- **Serial Read Task**: 10ms delay (prevents watchdog timeout)
-- **Data Process Task**: Waits on queue (no CPU waste)
-- **ROS Executor**: 10ms spin duration + 500ms delay for timing
+### Rebuilding micro-ROS from scratch
+```bash
+./build.sh run -t clean-microros   # then rebuild
+```
