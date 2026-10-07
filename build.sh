@@ -14,9 +14,9 @@ CLEAN_PATH="$(printf '%s' "${PATH:-}" | tr ':' '\n' \
     | grep -vE '/opt/ros/|_ws/install/|/ros2/' | paste -sd:)"
 
 exec env \
-    -u RMW_IMPLEMENTATION -u ROS_DISTRO -u ROS_VERSION -u ROS_PYTHON_VERSION \
+    -u ROS_DISTRO -u ROS_VERSION -u ROS_PYTHON_VERSION \
     -u ROS_DOMAIN_ID -u ROS_AUTOMATIC_DISCOVERY_RANGE -u ROS_LOCALHOST_ONLY \
     -u AMENT_PREFIX_PATH -u CMAKE_PREFIX_PATH -u COLCON_PREFIX_PATH \
     -u ROS_PACKAGE_PATH -u PYTHONPATH -u LD_LIBRARY_PATH -u _colcon_cd_root \
-    PATH="$CLEAN_PATH" \
+    RMW_IMPLEMENTATION=rmw_microxrcedds PATH="$CLEAN_PATH" \
     ~/.platformio/penv/bin/pio "${@:-run}"

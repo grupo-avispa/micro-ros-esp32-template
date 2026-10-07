@@ -29,7 +29,7 @@ A professional-grade firmware template for ESP32 microcontrollers running [micro
 This repository uses a git submodule for the micro-ROS component, so clone it recursively:
 
 ```bash
-git clone --recurse-submodules <repo-url>
+git clone --recurse-submodules https://github.com/grupo-avispa/micro-ros-esp32-template.git
 # or, if you already cloned it:
 git submodule update --init --recursive
 ```
@@ -39,6 +39,8 @@ To update the micro-ROS component to the latest upstream commit of its tracked b
 ```bash
 git submodule update --remote components/micro_ros_espidf_component
 ```
+
+> **Warning:** Updating the submodule can break the build. The component's `libmicroros.mk`, CMake setup and rclc API change between upstream commits, so you may need to adapt `build.sh`, `main/CMakeLists.txt` or your code (e.g. the `rcl_timer_callback_t` signature) and run `make -f libmicroros.mk clean` inside the component. Build and test before committing the new submodule pointer.
 
 ## Setup
 

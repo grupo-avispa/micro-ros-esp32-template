@@ -58,11 +58,9 @@ static std_msgs__msg__Int32 msg;
  * @brief Timer callback. Publishes the current counter value and increments it.
  * @param timer Timer that triggered the callback.
  * @param last_call_time Time of the previous call (unused).
- * @param arg User argument (unused).
  */
-static void timer_callback(rcl_timer_t* timer, int64_t last_call_time, uintptr_t arg) {
+static void timer_callback(rcl_timer_t* timer, int64_t last_call_time) {
   RCLC_UNUSED(last_call_time);
-  RCLC_UNUSED(arg);
   if (timer != nullptr) {
     ESP_LOGI(MACROS_TAG, "Publishing: %d", static_cast<int>(msg.data));
     RCSOFTCHECK(rcl_publish(&publisher, &msg, nullptr));
