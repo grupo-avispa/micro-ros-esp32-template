@@ -17,7 +17,8 @@ A professional-grade firmware template for ESP32 microcontrollers running [micro
 - **micro-ROS as a submodule**: Reproducible builds, kept in sync with upstream
 
 ## Dependencies
-- [PlatformIO](https://docs.platformio.org/) (Cross-platform build system)
+- [PlatformIO](https://docs.platformio.org/) (Cross-platform build system). The official `espressif32@6.13.0` platform is pinned in `platformio.ini`
+- `git`, `python3` and `curl` (needed to fetch the submodule, the toolchain and the udev rules)
 - [ESP-IDF](https://docs.espressif.com/projects/esp-idf/) (managed automatically by PlatformIO)
 - [Robot Operating System (ROS) 2](https://docs.ros.org/en/jazzy/) (middleware for robotics)
 - [micro-ROS](https://micro.ros.org/) (ROS 2 client library for microcontrollers)
@@ -67,6 +68,18 @@ Use the provided [`build.sh`](build.sh) wrapper, which strips the ROS environmen
 ```
 
 If your machine does **not** source ROS 2, plain `pio run` works too.
+
+> The first build compiles micro-ROS from source and takes several minutes. If you add the submodule or change `custom.meta` after a previous build, delete `.pio/build` so CMake reconfigures.
+
+### Linux: USB permissions
+
+On Linux, install the PlatformIO udev rules once so you can flash and debug without `sudo`, then re-plug the board:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/system/99-platformio-udev.rules | sudo tee /etc/udev/rules.d/99-platformio-udev.rules
+sudo udevadm control --reload-rules && sudo udevadm trigger
+sudo usermod -aG dialout $USER   # log out and back in afterwards
+```
 
 
 ## Configuration
@@ -179,6 +192,23 @@ And on the ROS 2 side:
 ros2 topic echo /esp32/counter
 ```
 
+## Debugging (ESP32-S3 built-in JTAG)
+
+The ESP32-S3 has a USB-Serial/JTAG peripheral, so no external probe is needed. `platformio.ini` is already configured with `debug_tool = esp-builtin`.
+
+1. Connect the cable to the port labelled **USB** (native, GPIO19/20), not the one labelled **UART**. `lsusb` must show `303a:1001 Espressif USB JTAG/serial debug unit`.
+2. Flash the firmware: `./build.sh run -t upload`. GDB does **not** flash (`debug_load_mode = manual`), so re-flash after every code change, otherwise you debug the old binary.
+3. In VS Code, run **PIO Debug**. Execution stops at `app_main()`. From the CLI: `./build.sh debug --interface=gdb -x .pioinit`.
+
+The debug settings in `platformio.ini` work around problems of the default tooling, so keep them together:
+
+| Setting | Why |
+| ------- | --- |
+| `platform = espressif32@6.13.0` | The unpinned `espressif32` may resolve to a fork whose SCons breaks with older PlatformIO Core |
+| `platform_packages = ...tool-openocd-esp32@2.1200.20230419` | The default OpenOCD 0.11 resets the USB-JTAG on `reset halt` and GDB loses the target |
+| `debug_port = :3333` | PlatformIO Core 6.2 starts OpenOCD in pipe mode with `gdb port pipe`, which OpenOCD 0.12 no longer accepts |
+| `debug_load_mode = manual` | OpenOCD fails to erase the flash when GDB runs `load` |
+
 ## The example: a timer-driven publisher
 
 [`main/main.cpp`](main/main.cpp) implements a minimal `std_msgs/Int32` publisher running inside a dedicated FreeRTOS task (`micro_ros_task`):
@@ -244,6 +274,20 @@ The ROS 2 build tools are missing from the ESP-IDF Python environment. See [Setu
 
 ### `Could not find ROS middleware implementation 'rmw_cyclonedds_cpp'` / host `/opt/ros` packages
 A system ROS 2 environment is leaking into the isolated micro-ROS build. Build with [`build.sh`](build.sh), which strips the ROS environment and `PATH`.
+
+### `No module named 'SCons.Tool.FortranCommon'`
+PlatformIO resolved `platform = espressif32` to a fork that is incompatible with your PlatformIO Core. Keep the platform pinned (`espressif32@6.13.0`) as in `platformio.ini`.
+
+### Debug: `Remote communication error. Target disconnected` / `LIBUSB_ERROR_NO_DEVICE`
+- Use the **USB** port, not **UART**, and check `lsusb | grep 303a:1001`.
+- Make sure the OpenOCD 0.12 package and `debug_port = :3333` from [Debugging](#debugging-esp32-s3-built-in-jtag) are present in `platformio.ini`.
+- Install the udev rules (see [Setup](#linux-usb-permissions)) and press RESET on the board, or re-plug it, if the USB device is stuck.
+
+### Debug: `Failed to erase flash` / `Error erasing flash with vFlashErase packet`
+GDB must not flash. Keep `debug_load_mode = manual` and flash with `./build.sh run -t upload`.
+
+### `Flash memory size mismatch detected. Expected 8MB, found 2MB!`
+`sdkconfig.esp32-s3-devkitc-1` is set to 2 MB. Set the real size of your module with `./build.sh run -t menuconfig` (Serial flasher config) if it has more.
 
 ### Connection Issues
 - Verify WiFi credentials and the Agent IP/port in `include/config_transport.hpp`.
